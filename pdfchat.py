@@ -1,89 +1,100 @@
-import streamlit as st
-from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import streamlit as st
 import google.generativeai as genai
-from langchain.vectorstores import FAISS
-from langchain_google_genai import ChatGoogleGenerativeAI
+from PyPDF2 import PdfReader
+from dotenv import load_dotenv
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain.vectorstores import Chroma
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
-from dotenv import load_dotenv
 
+# Load environment variables and configure Google API
 load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-genai.configure(api_key = os.getenv("GOOGLE_API_KEY")) 
-
-def get_pdf_text(pdf_docs):
+# Function to extract text from PDF files
+def extract_text_from_pdfs(pdf_files):
     text = ""
-    for pdf in pdf_docs:
+    for pdf in pdf_files:
         pdf_reader = PdfReader(pdf)
         for page in pdf_reader.pages:
             text += page.extract_text()
     return text
 
-def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size= 10000, chunk_overlap = 1000)
-    chunks = text_splitter.split_text(text)
-    return chunks
+# Function to split text into chunks
+def split_text_into_chunks(text):
+    splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    return splitter.split_text(text)
 
-def get_vector_store(text_chunks):
+# Function to create and save a vector store using Chroma
+def create_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(text_chunks, embedding = embeddings)
-    vector_store.save_local("faiss_index")
+    vector_store = Chroma.from_texts(chunks, embedding=embeddings, collection_name="pdf_chunks")
+    return vector_store
 
-def get_conversational_chain():
+# Function to load the QA chain
+def load_qa_conversational_chain():
     prompt_template = """
-    Answer the question in as detailed manner as possible from the provided context, make sure to provide all the details, if the answer is not in the provided
-    context then just say, "answer is not available in the context", dont provide the wrong answer\n\n
+    Answer the question with details from the context provided. If the answer is not in the context, respond with 'Answer not available in the context.'\n\n
     Context:\n {context}?\n
-    Question:\n {question}\n
-
+    Question: \n{question}\n
     Answer:
-"""
-    model = ChatGoogleGenerativeAI(model = "gemini-pro",temperature = 0.3)
+    """
+    return load_qa_chain(
+        llm=ChatGoogleGenerativeAI(model="gemini-1.5-pro", client=genai, temperature=0.7),
+        chain_type="stuff",
+        prompt=PromptTemplate(template=prompt_template, input_variables=["context", "question"]),
+    )
 
-    prompt = PromptTemplate(template= prompt_template,input_variables=["context","question"])
-    chain = load_qa_chain(model,chain_type = "stuff",prompt = prompt)
-    return chain
+# Function to handle user queries
+def handle_user_query(question, vector_store):
+    docs = vector_store.similarity_search(question)
+    chain = load_qa_conversational_chain()
+    return chain({"input_documents": docs, "question": question}, return_only_outputs=True)
 
-def user_input(user_question):
-    embeddings = GoogleGenerativeAIEmbeddings(model = "models/embedding-001")
-    
-    new_db = FAISS.load_local("faiss_index", embeddings)
-    docs = new_db.similarity_search(user_question)
-
-    chain = get_conversational_chain()
-
-    
-    response = chain(
-        {"input_documents":docs, "question": user_question}
-        , return_only_outputs=True)
-
-    print(response)
-    st.write("Reply: ", response["output_text"])
-
+# Main Streamlit app
 def main():
-  st.set_page_config(page_title="Chat PDF", page_icon=":file_pdf:")  # Set title and icon
+    st.set_page_config(page_title="Nu-Pie Q&A", page_icon="🔍")
+    
+    st.title("Nu-Pie PDF Q&A Bot")
 
-  st.header("Chat with PDF using Gemini")  # Colored header with center alignment
+    # Upload PDFs
+    st.sidebar.title("Upload PDF Documents")
+    pdf_files = st.sidebar.file_uploader("Choose PDF files", accept_multiple_files=True)
+    
+    if st.sidebar.button("Process PDFs"):
+        if pdf_files:
+            with st.spinner("Processing..."):
+                text_chunks = split_text_into_chunks(extract_text_from_pdfs(pdf_files))
+                vector_store = create_vector_store(text_chunks)
+                st.session_state.vector_store = vector_store
+                st.sidebar.success("PDFs processed successfully!")
+        else:
+            st.sidebar.warning("Please upload PDFs before processing.")
 
-  user_question = st.text_input("**Ask a Question from the PDF Files**", key="question_input")  # Styled text input
+    # User input for question
+    question = st.text_input("Enter your question:")
 
-  if user_question:
-    user_input(user_question)
+    if st.button("Get Answer"):
+        if question:
+            with st.spinner("Finding the answer..."):
+                try:
+                    if "vector_store" in st.session_state:
+                        response = handle_user_query(question, st.session_state.vector_store)
+                        st.write("**Answer:**", response['output_text'])
+                    else:
+                        st.error("Please process the PDFs first.")
+                except Exception as e:
+                    st.error(f"An error occurred: {str(e)}")
+        else:
+            st.warning("Please enter a question.")
 
-  with st.sidebar:
-    st.title("Menu:")  # Green colored sidebar title
+    st.sidebar.markdown("""
+        ## About
+        This app is a Q&A tool that lets you upload PDF documents and ask questions about their content. Powered by a Large Language Model and Google Generative AI.
+        \nMade with ❤️ by [Nu-Pie Data Science Team](https://nu-pie.com/data-team-as-a-service-dtaas/)
+    """)
 
-    pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
-
-    if st.button("Submit & Process"):  # Styled button
-      with st.spinner("Processing..."):
-        raw_text = get_pdf_text(pdf_docs)
-        text_chunks = get_text_chunks(raw_text)
-        get_vector_store(text_chunks)
-      st.success("Done!")
-        
 if __name__ == "__main__":
     main()
