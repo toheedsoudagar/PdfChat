@@ -139,7 +139,7 @@ def main():
             with st.spinner("Thinking..."):
                 response = user_input(prompt)
                 placeholder = st.empty()
-                full_response = 'Retry...'
+                full_response = ''
                 for item in response['output_text']:
                     full_response += item
                     placeholder.markdown(full_response)
