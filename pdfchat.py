@@ -4,7 +4,7 @@ import google.generativeai as genai
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
@@ -41,7 +41,7 @@ def load_qa_conversational_chain():
     Answer:
     """
     return load_qa_chain(
-        llm=ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", client=genai, temperature=0.7),
+        llm=ChatGoogleGenerativeAI(model="gemini-1.5-pro", client=genai, temperature=0.7),
         chain_type="stuff",
         prompt=PromptTemplate(template=prompt_template, input_variables=["context", "question"]),
     )
