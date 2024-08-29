@@ -1,153 +1,90 @@
 import os
-from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import streamlit as st
 import google.generativeai as genai
+from PyPDF2 import PdfReader
+from dotenv import load_dotenv
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.vectorstores import FAISS
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
-from dotenv import load_dotenv
 
+# Load environment variables and configure Google API
 load_dotenv()
-os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# read all pdf files and return text
+# Function to extract text from PDF files
+def extract_text_from_pdfs(pdf_files):
+    return "".join([PdfReader(pdf).pages[page].extract_text() for pdf in pdf_files for page in range(len(PdfReader(pdf).pages))])
 
+# Function to split text into chunks
+def split_text_into_chunks(text):
+    return RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000).split_text(text)
 
-def get_pdf_text(pdf_docs):
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
+# Function to create and save a vector store
+def create_vector_store(chunks):
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    FAISS.from_texts(chunks, embedding=embeddings).save_local("faiss_index")
 
-# split text into chunks
-
-
-def get_text_chunks(text):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=10000, chunk_overlap=1000)
-    chunks = splitter.split_text(text)
-    return chunks  # list of strings
-
-# get embeddings for each chunk
-
-
-def get_vector_store(chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001")  # type: ignore
-    vector_store = FAISS.from_texts(chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")
-
-
-def get_conversational_chain():
+# Function to load the QA chain
+def load_qa_conversational_chain():
     prompt_template = """
-    Answer the question as detailed as possible from the provided context, make sure to provide all the details, if the answer is not in
-    provided context just say, "answer is not available in the context", don't provide the wrong answer\n\n
+    Answer the question with details from the context provided. If the answer is not in the context, respond with 'Answer not available in the context.'\n\n
     Context:\n {context}?\n
     Question: \n{question}\n
-
     Answer:
     """
-
-    model = ChatGoogleGenerativeAI(model="gemini-1.5-pro",
-                                   client=genai,
-                                   temperature=0.7,
-                                   )
-    prompt = PromptTemplate(template=prompt_template,
-                            input_variables=["context", "question"])
-    chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
-    return chain
-
-
-def clear_chat_history():
-    st.session_state.messages = [
-        {"role": "assistant", "content": "upload some pdfs and ask me a question"}]
-
-
-def user_input(user_question):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001")  # type: ignore
-
-    new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True) 
-    docs = new_db.similarity_search(user_question)
-
-    chain = get_conversational_chain()
-
-    response = chain(
-        {"input_documents": docs, "question": user_question}, return_only_outputs=True, )
-
-    print(response)
-    return response
-
-
-def main():
-    st.set_page_config(
-        page_title="Nu-Pie chatBot",
-        page_icon="🤖"
+    return load_qa_chain(
+        llm=ChatGoogleGenerativeAI(model="gemini-1.5-pro", client=genai, temperature=0.7),
+        chain_type="stuff",
+        prompt=PromptTemplate(template=prompt_template, input_variables=["context", "question"]),
     )
 
-    # Sidebar for uploading PDF files
-    with st.sidebar:
-        st.title("🤗💬 Nu-Pie LLM Personalized Q&A Chatbot App")
-        pdf_docs = st.file_uploader(
-            "Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
-        if st.button("Submit & Process"):
-            with st.spinner("Processing..."):
-                raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
-                get_vector_store(text_chunks)
-                st.success("Done")
-        st.markdown('''
-    ## About
-    This app is an LLM-powered chatbot built using:
-    - [Streamlit](https://streamlit.io/)
-   
+# Function to handle user queries
+def handle_user_query(question):
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    docs = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True).similarity_search(question)
+    return load_qa_conversational_chain()({"input_documents": docs, "question": question}, return_only_outputs=True)
 
-    ''')
+# Function to clear chat history
+def clear_chat_history():
+    st.session_state.messages = [{"role": "assistant", "content": "Upload PDFs and ask a question"}]
+
+# Main Streamlit app
+def main():
+    st.set_page_config(page_title="Nu-Pie ChatBot", page_icon="🤖")
+    st.sidebar.title("🤗💬 Nu-Pie LLM Q&A Chatbot")
     
-        st.write('Made with ❤️ by [Nu-Pie Data Science Team](https://nu-pie.com/data-team-as-a-service-dtaas/)')
+    # Upload PDFs
+    pdf_files = st.sidebar.file_uploader("Upload PDFs", accept_multiple_files=True)
+    if st.sidebar.button("Submit & Process"):
+        with st.spinner("Processing..."):
+            text_chunks = split_text_into_chunks(extract_text_from_pdfs(pdf_files))
+            create_vector_store(text_chunks)
+            st.sidebar.success("Processing completed!")
 
-    # Main content area for displaying chat messages
-    st.title("Chat with Nu-Pie Companion💬")
-    st.write("Welcome to the chat!")
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
+    st.sidebar.markdown("### About\nThis app is an LLM-powered chatbot built using Streamlit.\n\nMade with ❤️ by [Nu-Pie Data Science Team](https://nu-pie.com/data-team-as-a-service-dtaas/)")
+    
+    st.title("Chat with Nu-Pie Companion💬")
+    
+    # Initialize chat session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "Upload PDFs and ask a question"}]
 
-    # Chat input
-    # Placeholder for chat messages
-
-    if "messages" not in st.session_state.keys():
-        st.session_state.messages = [
-            {"role": "assistant", "content": "upload some pdfs and ask me a question"}]
-
+    # Display chat messages
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+        st.chat_message(message["role"]).write(message["content"])
 
+    # Handle new user input
     if prompt := st.chat_input():
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
-
-    # Display chat messages and bot response
-    if st.session_state.messages[-1]["role"] != "assistant":
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = user_input(prompt)
-                placeholder = st.empty()
-                full_response = ''
-                for item in response['output_text']:
-                    full_response += item
-                    placeholder.markdown(full_response)
-                placeholder.markdown(full_response)
-        if response is not None:
-            message = {"role": "assistant", "content": full_response}
-            st.session_state.messages.append(message)
-
+        st.chat_message("user").write(prompt)
+        with st.chat_message("assistant"), st.spinner("Thinking..."):
+            response = handle_user_query(prompt)
+            full_response = ''.join(response['output_text'])
+            st.write(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 if __name__ == "__main__":
     main()
