@@ -15,6 +15,8 @@ os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # read all pdf files and return text
+
+
 def get_pdf_text(pdf_docs):
     text = ""
     for pdf in pdf_docs:
@@ -24,6 +26,8 @@ def get_pdf_text(pdf_docs):
     return text
 
 # split text into chunks
+
+
 def get_text_chunks(text):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=10000, chunk_overlap=1000)
@@ -31,11 +35,14 @@ def get_text_chunks(text):
     return chunks  # list of strings
 
 # get embeddings for each chunk
+
+
 def get_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001")  # type: ignore
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     vector_store.save_local("faiss_index")
+
 
 def get_conversational_chain():
     prompt_template = """
@@ -56,11 +63,13 @@ def get_conversational_chain():
     chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
     return chain
 
+
 def clear_chat_history():
     st.session_state.messages = [
         {"role": "assistant", "content": "upload some pdfs and ask me a question"}]
 
-def user_input(user_question, retries=3):
+
+def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001")  # type: ignore
 
@@ -69,16 +78,12 @@ def user_input(user_question, retries=3):
 
     chain = get_conversational_chain()
 
-    response = None
-    for attempt in range(5):
-        response = chain(
-            {"input_documents": docs, "question": user_question}, return_only_outputs=True)
-        if response and response.get("output_text"):
-            break
-    if response is None or not response.get("output_text"):
-        return {"output_text": "Sorry, I couldn't generate a response. Please try again later."}
-    
+    response = chain(
+        {"input_documents": docs, "question": user_question}, return_only_outputs=True, )
+
+    print(response)
     return response
+
 
 def main():
     st.set_page_config(
@@ -134,7 +139,7 @@ def main():
             with st.spinner("Thinking..."):
                 response = user_input(prompt)
                 placeholder = st.empty()
-                full_response = ''
+                full_response = 'Retry...'
                 for item in response['output_text']:
                     full_response += item
                     placeholder.markdown(full_response)
