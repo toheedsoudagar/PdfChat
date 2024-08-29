@@ -68,17 +68,17 @@ def main():
 
   st.header("Chat with PDF using Gemini")  # Colored header with center alignment
 
-  user_question = st.text_input("**Ask a Question from the PDF Files**", key="question_input", style="font-size: 18px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;")  # Styled text input
+  user_question = st.text_input("**Ask a Question from the PDF Files**", key="question_input")  # Styled text input
 
   if user_question:
     user_input(user_question)
 
   with st.sidebar:
-    st.title("<h3 style='color: #2ecc71;'>Menu:</h3>", unsafe_allow_html=True)  # Green colored sidebar title
+    st.title("Menu:")  # Green colored sidebar title
 
     pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
 
-    if st.button("Submit & Process", style="background-color: #9b59b6; color: white; padding: 10px 20px; border: none; border-radius: 5px;"):  # Styled button
+    if st.button("Submit & Process"):  # Styled button
       with st.spinner("Processing..."):
         raw_text = get_pdf_text(pdf_docs)
         text_chunks = get_text_chunks(raw_text)
