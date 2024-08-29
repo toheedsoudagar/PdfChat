@@ -66,7 +66,7 @@ def user_input(user_question):
 def main():
   st.set_page_config(page_title="Chat PDF", page_icon=":file_pdf:")  # Set title and icon
 
-  st.header("<h1 style='color: #3498db; text-align: center;'>Chat with PDF using Gemini</h1>", unsafe_allow_html=True)  # Colored header with center alignment
+  st.header("Chat with PDF using Gemini")  # Colored header with center alignment
 
   user_question = st.text_input("**Ask a Question from the PDF Files**", key="question_input", style="font-size: 18px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;")  # Styled text input
 
