@@ -26,7 +26,7 @@ def get_pdf_text(pdf_docs):
                     text += extracted_text + "\n"  # Add a newline for separation
         except Exception as e:
             st.error(f"Error reading {pdf.name}: {e}")  # Error handling for PDF reading
-    return text
+    return text.strip()  # Strip to remove any trailing newlines
 
 # Function to split the extracted text into chunks
 def get_text_chunks(text):
@@ -77,6 +77,9 @@ def user_input(user_question):
 
     # Retrieve relevant document chunks based on the user's question
     docs = vector_store.similarity_search(user_question)
+    if not docs:
+        return "I'm sorry, I couldn't find any relevant information in the provided context."
+    
     chain = get_conversational_chain()
     response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
     return response['output_text']
