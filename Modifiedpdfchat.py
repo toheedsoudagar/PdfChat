@@ -28,15 +28,15 @@ def get_pdf_text(pdf_docs):
             st.error(f"Error reading {pdf.name}: {e}")
     return text.strip()
 
-# Function to split the extracted text into chunks
+# Function to split the extracted text into manageable chunks
 def get_text_chunks(text):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,  # Smaller chunks for better context management
-        chunk_overlap=200  # Overlap to maintain context
+        chunk_size=2000,  # Size of each chunk
+        chunk_overlap=200  # Overlap for context
     )
     return splitter.split_text(text)
 
-# Function to create a vector store for fast retrieval
+# Function to create a vector store for fast search
 def get_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
@@ -45,7 +45,7 @@ def get_vector_store(chunks):
 # Function to set up the conversational chain for question answering
 def get_conversational_chain():
     prompt_template = """
-    You are a highly knowledgeable assistant. Answer the question based on the provided context. If the answer is not available, state that clearly. 
+    You are a knowledgeable assistant. Provide detailed answers based on the context provided. If the answer is not available, state that clearly.
 
     Context:
     {context}
@@ -65,12 +65,12 @@ def clear_chat_history():
         {"role": "assistant", "content": "Upload some PDFs and ask me a question."}
     ]
 
-# Function to process user input and generate a response
+# Function to handle user input and generate a response
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     
-    # Retrieve relevant document chunks based on the user's question
+    # Search for relevant documents
     docs = vector_store.similarity_search(user_question)
     if not docs:
         return "I couldn't find any relevant information in the provided context."
@@ -108,7 +108,7 @@ def main():
                 st.warning("Please upload at least one PDF file.")
 
         st.markdown('## About This App')
-        st.write('This app uses a large language model to answer questions based on the contents of uploaded PDFs.')
+        st.write('This app uses a language model to answer questions based on the contents of uploaded PDFs.')
 
     st.title("Chat with PDF Assistant")
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
