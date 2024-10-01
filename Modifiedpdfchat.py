@@ -23,16 +23,16 @@ def get_pdf_text(pdf_docs):
             for page in pdf_reader.pages:
                 extracted_text = page.extract_text()
                 if extracted_text:
-                    text += extracted_text + "\n"  # Add a newline for separation
+                    text += extracted_text + "\n"
         except Exception as e:
-            st.error(f"Error reading {pdf.name}: {e}")  # Error handling for PDF reading
-    return text.strip()  # Strip to remove any trailing newlines
+            st.error(f"Error reading {pdf.name}: {e}")
+    return text.strip()
 
 # Function to split the extracted text into chunks
 def get_text_chunks(text):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=10000,  # Maximum size of each chunk
-        chunk_overlap=1000  # Overlap between chunks for context
+        chunk_size=2000,  # Smaller chunks for better context management
+        chunk_overlap=200  # Overlap to maintain context
     )
     return splitter.split_text(text)
 
@@ -40,17 +40,12 @@ def get_text_chunks(text):
 def get_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")  # Save vector store locally
+    vector_store.save_local("faiss_index")
 
 # Function to set up the conversational chain for question answering
 def get_conversational_chain():
     prompt_template = """
-    You are an intelligent assistant trained to answer questions based on the provided context. Please follow these instructions carefully:
-
-    1. Use the context provided to formulate your answer. If the context does not contain relevant information to answer the question, explicitly state that the answer is not available.
-    2. Be detailed and thorough in your response, ensuring that you cover all aspects of the question as best as possible.
-    3. If applicable, provide examples or references from the context to support your answer.
-    4. If the question is unclear or ambiguous, ask for clarification instead of guessing.
+    You are a highly knowledgeable assistant. Answer the question based on the provided context. If the answer is not available, state that clearly. 
 
     Context:
     {context}
@@ -74,11 +69,11 @@ def clear_chat_history():
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-
+    
     # Retrieve relevant document chunks based on the user's question
     docs = vector_store.similarity_search(user_question)
     if not docs:
-        return "I'm sorry, I couldn't find any relevant information in the provided context."
+        return "I couldn't find any relevant information in the provided context."
     
     chain = get_conversational_chain()
     response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
@@ -86,9 +81,8 @@ def user_input(user_question):
 
 # Main function for the Streamlit app
 def main():
-    st.set_page_config(page_title="Nu-Pie ChatBot", page_icon="🤖")
+    st.set_page_config(page_title="PDF Chatbot", page_icon="🤖")
 
-    # Initialize session state for storing uploaded PDFs and messages
     if "pdf_docs" not in st.session_state:
         st.session_state.pdf_docs = []
         st.session_state.messages = [
@@ -96,51 +90,45 @@ def main():
         ]
 
     with st.sidebar:
-        st.title("🤗💬 Nu-Pie LLM Personalized Q&A Chatbot App")
+        st.title("PDF Chatbot")
         pdf_docs = st.file_uploader("Upload your PDF Files and click 'Submit & Process'", accept_multiple_files=True)
 
         if st.button("Submit & Process"):
             if pdf_docs:
-                st.session_state.pdf_docs = pdf_docs  # Store uploaded PDFs
+                st.session_state.pdf_docs = pdf_docs
                 with st.spinner("Processing..."):
-                    raw_text = get_pdf_text(pdf_docs)  # Extract text from PDFs
-                    if raw_text:  # Ensure text was extracted
-                        text_chunks = get_text_chunks(raw_text)  # Split text into chunks
-                        get_vector_store(text_chunks)  # Create and save vector store
+                    raw_text = get_pdf_text(pdf_docs)
+                    if raw_text:
+                        text_chunks = get_text_chunks(raw_text)
+                        get_vector_store(text_chunks)
                         st.success("Processing completed!")
                     else:
                         st.warning("No text was extracted from the PDFs.")
             else:
                 st.warning("Please upload at least one PDF file.")
 
-        st.markdown('''## About
-        This app is an LLM-powered chatbot built using:
-        - [Streamlit](https://streamlit.io/)''')
-        st.write('Made with ❤️ by [Nu-Pie Data Science Team](https://nu-pie.com/data-team-as-a-service-dtaas/)')
+        st.markdown('## About This App')
+        st.write('This app uses a large language model to answer questions based on the contents of uploaded PDFs.')
 
-    st.title("Chat with Nu-Pie Companion💬")
-    st.write("Welcome to the chat!")
+    st.title("Chat with PDF Assistant")
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
-    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-    # Handle user input
     if prompt := st.chat_input():
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
-        # Proceed only if PDFs have been processed
         if st.session_state.pdf_docs:
             if st.session_state.messages[-1]["role"] != "assistant":
                 with st.chat_message("assistant"):
                     with st.spinner("Thinking..."):
-                        response = user_input(prompt)  # Generate AI response
+                        response = user_input(prompt)
                         st.session_state.messages.append({"role": "assistant", "content": response})
-                        st.write(response)  # Display response
+                        st.write(response)
         else:
             with st.chat_message("assistant"):
                 st.write("Please upload PDFs to get answers.")
