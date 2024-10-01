@@ -45,10 +45,19 @@ def get_vector_store(chunks):
 # Function to set up the conversational chain for question answering
 def get_conversational_chain():
     prompt_template = """
-    Answer the question based on the provided context. If the answer is not available,
-    respond with "answer is not available in the context." Do not guess.\n\n
-    Context:\n{context}?\n
-    Question:\n{question}\n
+    You are an intelligent assistant trained to answer questions based on the provided context. Please follow these instructions carefully:
+
+    1. Use the context provided to formulate your answer. If the context does not contain relevant information to answer the question, explicitly state that the answer is not available.
+    2. Be detailed and thorough in your response, ensuring that you cover all aspects of the question as best as possible.
+    3. If applicable, provide examples or references from the context to support your answer.
+    4. If the question is unclear or ambiguous, ask for clarification instead of guessing.
+
+    Context:
+    {context}
+
+    Question:
+    {question}
+
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
