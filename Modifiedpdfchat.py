@@ -28,11 +28,11 @@ def get_pdf_text(pdf_docs):
             st.error(f"Error reading {pdf.name}: {e}")
     return text.strip()
 
-# Function to split the extracted text into manageable chunks
+# Function to split the extracted text into chunks
 def get_text_chunks(text):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,  # Size of each chunk
-        chunk_overlap=200  # Overlap for context
+        chunk_size=2000,
+        chunk_overlap=200
     )
     return splitter.split_text(text)
 
