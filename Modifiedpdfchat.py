@@ -69,7 +69,7 @@ def clear_chat_history():
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    
+
     # Search for relevant documents
     docs = vector_store.similarity_search(user_question)
     if not docs:
